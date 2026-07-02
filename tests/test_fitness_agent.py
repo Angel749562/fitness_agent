@@ -62,6 +62,69 @@ def test_real_time_monitor_returns_summary():
     assert "平均心率" in summary
 
 
+def test_workout_pushes_structured_events():
+    events = []
+    summary = monitor.run_workout(
+        {"健身目标": "减脂", "年龄": "30", "体重": "75"},
+        "慢跑30分钟",
+        ticks=3,
+        tick_delay=0,
+        event_sink=lambda event_type, data: events.append({"type": event_type, "data": data}),
+    )
+    event_types = [event["type"] for event in events]
+
+    assert event_types.count("heart_rate_sample") == 3
+    assert "session_summary" in event_types
+    assert "workout_tick" not in event_types
+    assert "workout_summary" not in event_types
+    assert events[0]["data"]["sample_index"] == 1
+    assert "heart_rate" in events[0]["data"]
+    assert "cadence" in events[0]["data"]
+    assert "pace" in events[0]["data"]
+    assert "in_target_zone" in events[0]["data"]
+    assert events[0]["data"]["training_zone"] == "燃脂区"
+    assert events[-1]["data"]["training_zone"] == "燃脂区"
+    assert events[-1]["data"]["summary"] == summary
+
+
+def test_workout_stop_returns_partial_summary(monkeypatch):
+    samples = [
+        {"心率": 120, "运动强度": "中", "配速": 7.2, "步频": 170},
+        {"心率": 150, "运动强度": "高", "配速": 6.4, "步频": 158},
+    ]
+
+    def fake_tick(hr_center, tick, total):
+        return samples[tick]
+
+    monkeypatch.setattr(monitor, "simulate_tick", fake_tick)
+
+    calls = {"count": 0}
+
+    def stop_after_two_samples():
+        calls["count"] += 1
+        return calls["count"] > 2
+
+    events = list(monitor.iter_workout_events(
+        {"健身目标": "减脂", "年龄": "30", "体重": "75"},
+        "慢跑30分钟",
+        ticks=5,
+        tick_delay=0,
+        stop_checker=stop_after_two_samples,
+    ))
+    event_types = [event["type"] for event in events]
+
+    assert event_types.count("heart_rate_sample") == 2
+    assert event_types[-2:] == ["session_summary", "stopped"]
+
+    summary = events[-2]["data"]
+    assert summary["average_heart_rate"] == 135
+    assert summary["peak_heart_rate"] == 150
+    assert summary["in_zone_pct"] == 50
+    assert summary["corrections"] >= 1
+    assert summary["samples"] == 2
+    assert summary["stopped"] is True
+
+
 def test_evaluate_session_reads_summary():
     summary = monitor.run_workout(
         {"健身目标": "减脂", "年龄": "30"}, "慢跑", ticks=8, tick_delay=0

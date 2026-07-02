@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>实时训练看板</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/dashboard/styles.css">
+</head>
+<body>
+  <main class="page-shell">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">健身训练助手</p>
+        <h1>实时训练看板</h1>
+        <p class="subtitle">实时查看心率、训练区间、配速步频、动作建议和训练总结。</p>
+      </div>
+      <div class="status-card">
+        <span id="statusBadge" class="status-badge idle">未开始</span>
+        <span id="sessionId" class="session-id">尚未创建会话</span>
+      </div>
+    </section>
+
+    <section class="panel controls">
+      <label for="promptInput">训练目标</label>
+      <textarea id="promptInput" rows="3">我想减脂，今年30岁，体重75公斤，新手</textarea>
+      <div class="control-row">
+        <label class="checkbox-label">
+          <input id="demoInput" type="checkbox" checked>
+          演示模式
+        </label>
+        <label>
+          采样数
+          <input id="ticksInput" type="number" min="0" max="300" value="12">
+        </label>
+        <label>
+          间隔秒
+          <input id="delayInput" type="number" min="0" max="60" step="0.1" value="1">
+        </label>
+        <button id="startButton" type="button">开始训练</button>
+        <button id="stopButton" type="button" disabled>结束训练</button>
+      </div>
+    </section>
+
+    <section class="metric-grid" aria-label="实时训练指标">
+      <article class="metric-card primary">
+        <span class="metric-label">当前心率</span>
+        <strong id="heartRate">--</strong>
+        <span class="metric-unit">次/分钟</span>
+      </article>
+      <article class="metric-card">
+        <span class="metric-label">目标心率区间</span>
+        <strong id="targetRange">--</strong>
+        <span class="metric-unit">次/分钟</span>
+      </article>
+      <article class="metric-card">
+        <span class="metric-label">训练区间</span>
+        <strong id="trainingZone">--</strong>
+        <span id="zoneState" class="metric-unit">等待数据</span>
+      </article>
+      <article class="metric-card">
+        <span class="metric-label">配速</span>
+        <strong id="pace">--</strong>
+        <span class="metric-unit">分钟/公里</span>
+      </article>
+      <article class="metric-card">
+        <span class="metric-label">步频</span>
+        <strong id="cadence">--</strong>
+        <span class="metric-unit">步/分钟</span>
+      </article>
+      <article class="metric-card">
+        <span class="metric-label">训练时长</span>
+        <strong id="duration">00:00</strong>
+        <span class="metric-unit">从首个心率采样开始</span>
+      </article>
+    </section>
+
+    <section class="panel advice-panel">
+      <div class="panel-title-row">
+        <h2>最新建议</h2>
+        <span id="adviceReason">等待训练数据</span>
+      </div>
+      <p id="latestAdvice">暂无建议，等待训练数据...</p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title-row">
+        <h2>训练进度</h2>
+        <span id="progressText">0 / 0</span>
+      </div>
+      <div class="progress-track">
+        <div id="progressBar" class="progress-bar"></div>
+      </div>
+    </section>
+
+    <section class="panel summary-panel">
+      <div class="panel-title-row">
+        <h2>训练总结</h2>
+        <span id="summaryStatus">未完成</span>
+      </div>
+      <p id="summaryText">训练完成后会显示总结。</p>
+      <div class="summary-grid">
+        <div><span>平均心率</span><strong id="averageHr">--</strong></div>
+        <div><span>峰值心率</span><strong id="peakHr">--</strong></div>
+        <div><span>达标率</span><strong id="inZonePct">--</strong></div>
+        <div><span>纠正次数</span><strong id="corrections">--</strong></div>
+        <div><span>采样数</span><strong id="samples">--</strong></div>
+      </div>
+    </section>
+
+    <section class="panel event-panel">
+      <div class="panel-title-row">
+        <h2>事件日志</h2>
+        <button id="clearLogButton" type="button" class="ghost-button">清空</button>
+      </div>
+      <ol id="eventLog" class="event-log"></ol>
+    </section>
+  </main>
+
+  <script src="/dashboard/app.js"></script>
+</body>
+</html>
