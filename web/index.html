@@ -3,120 +3,301 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>实时训练看板</title>
-  <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="/dashboard/styles.css">
+  <meta name="theme-color" content="#f5f5f7">
+  <meta name="description" content="Fitness Agent 实时训练看板，提供心率监测、节奏分析和智能训练建议。">
+  <title>Fitness Agent · 智能训练看板</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♥</text></svg>">
+  <link rel="stylesheet" href="/dashboard/styles.css?v=6">
 </head>
 <body>
-  <main class="page-shell">
-    <section class="hero">
-      <div>
-        <p class="eyebrow">健身训练助手</p>
-        <h1>实时训练看板</h1>
-        <p class="subtitle">实时查看心率、训练区间、配速步频、动作建议和训练总结。</p>
+  <div class="page-glow glow-one" aria-hidden="true"></div>
+  <div class="page-glow glow-two" aria-hidden="true"></div>
+
+  <nav class="site-nav" aria-label="主导航">
+    <div class="nav-inner">
+      <a class="nav-brand" href="#top" aria-label="Fitness Agent 首页">
+        <span class="brand-symbol" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M3 12h3.2l2.2-5.2 3.5 10.7 2.5-5.5H21" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span>Fitness Agent</span>
+      </a>
+      <div class="nav-links" aria-label="页面导航">
+        <a href="#coach">开始训练</a>
+        <a href="#metrics">实时指标</a>
+        <a href="#summary">训练总结</a>
       </div>
-      <div class="status-card">
-        <span id="statusBadge" class="status-badge idle">未开始</span>
-        <span id="sessionId" class="session-id">尚未创建会话</span>
+      <div class="status-cluster">
+        <span id="statusBadge" class="status-badge idle" role="status" aria-live="polite">
+          <span class="dot" aria-hidden="true"></span>
+          <span id="statusText">未开始</span>
+        </span>
+        <span id="sessionId" class="session-id">等待新训练</span>
+      </div>
+    </div>
+  </nav>
+
+  <main id="top" class="page-shell">
+    <header class="hero-copy reveal">
+      <p class="eyebrow">AI FITNESS COACH</p>
+      <h1>训练，<span>刚刚好。</span></h1>
+      <p class="hero-description">把实时心率、运动节奏和智能建议，收进一张会呼吸的训练看板。</p>
+      <div class="hero-points" aria-label="产品特点">
+        <span><i aria-hidden="true"></i>实时感知</span>
+        <span><i aria-hidden="true"></i>智能纠正</span>
+        <span><i aria-hidden="true"></i>训练复盘</span>
+      </div>
+    </header>
+
+    <section id="coach" class="coach-card panel reveal" aria-labelledby="coachTitle">
+      <div class="coach-heading">
+        <div>
+          <span class="section-kicker">YOUR COACH</span>
+          <h2 id="coachTitle">今天，想练成什么样？</h2>
+        </div>
+        <span class="coach-badge">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="m12 3 1.65 4.35L18 9l-4.35 1.65L12 15l-1.65-4.35L6 9l4.35-1.65L12 3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+            <path d="m18.5 15 .8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z" fill="currentColor"/>
+          </svg>
+          AI 在线
+        </span>
+      </div>
+
+      <label class="sr-only" for="promptInput">训练目标</label>
+      <div class="prompt-shell">
+        <textarea id="promptInput" rows="2" placeholder="例如：我想减脂，今年 30 岁，体重 75 公斤，新手">我想减脂，今年30岁，体重75公斤，新手</textarea>
+        <span class="prompt-hint">Ctrl + Enter 开始</span>
+      </div>
+
+      <div class="preset-row" aria-label="常用训练目标">
+        <span class="preset-label">快速选择</span>
+        <button class="preset-chip" type="button" data-prompt="我想减脂，今年30岁，体重75公斤，新手">减脂入门</button>
+        <button class="preset-chip" type="button" data-prompt="我想增肌，有半年训练经验，希望安排力量训练">增肌进阶</button>
+        <button class="preset-chip" type="button" data-prompt="我想提升耐力，有跑步基础，希望改善心肺能力">耐力提升</button>
+      </div>
+
+      <div class="coach-actions">
+        <details class="advanced-options">
+          <summary>
+            <span class="settings-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </span>
+            训练参数
+            <span class="chevron" aria-hidden="true">⌄</span>
+          </summary>
+          <div class="options-grid">
+            <label class="switch">
+              <input id="demoInput" type="checkbox" checked>
+              <span class="track" aria-hidden="true"></span>
+              <span class="switch-copy"><strong>演示模式</strong><small>无需外部模型即可体验</small></span>
+            </label>
+            <label class="num-field">
+              <span>采样数</span>
+              <input id="ticksInput" type="number" min="0" max="300" value="12">
+            </label>
+            <label class="num-field">
+              <span>间隔秒</span>
+              <input id="delayInput" type="number" min="0" max="60" step="0.1" value="1">
+            </label>
+          </div>
+        </details>
+
+        <div class="button-group">
+          <button id="stopButton" type="button" class="secondary-button stop-button" disabled>
+            <span class="stop-icon" aria-hidden="true"></span>
+            <span class="button-label">结束训练</span>
+          </button>
+          <button id="startButton" type="button" class="primary-button">
+            <span class="button-label">开始训练</span>
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m7 4 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
       </div>
     </section>
 
-    <section class="panel controls">
-      <label for="promptInput">训练目标</label>
-      <textarea id="promptInput" rows="3">我想减脂，今年30岁，体重75公斤，新手</textarea>
-      <div class="control-row">
-        <label class="checkbox-label">
-          <input id="demoInput" type="checkbox" checked>
-          演示模式
-        </label>
-        <label>
-          采样数
-          <input id="ticksInput" type="number" min="0" max="300" value="12">
-        </label>
-        <label>
-          间隔秒
-          <input id="delayInput" type="number" min="0" max="60" step="0.1" value="1">
-        </label>
-        <button id="startButton" type="button">开始训练</button>
-        <button id="stopButton" type="button" disabled>结束训练</button>
+    <section id="metrics" class="section-block reveal" aria-labelledby="metricsTitle">
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">LIVE METRICS</span>
+          <h2 id="metricsTitle">身体状态，一目了然。</h2>
+        </div>
+        <p>数据通过实时连接持续更新</p>
+      </div>
+
+      <div class="metric-grid" aria-label="实时训练指标">
+        <article id="heartRateCard" class="metric-card heart-card">
+          <div class="heart-card-copy">
+            <span class="metric-label light-label">
+              <span class="live-indicator" aria-hidden="true"></span>
+              当前心率
+            </span>
+            <div class="heart-value-row">
+              <strong id="heartRate" aria-live="polite">--</strong>
+              <span class="metric-unit">BPM</span>
+            </div>
+            <p>跟随你的每一次心跳，实时调整训练节奏。</p>
+          </div>
+          <div class="heart-orbit" aria-hidden="true">
+            <span class="orbit orbit-one"></span>
+            <span class="orbit orbit-two"></span>
+            <span class="orbit orbit-three"></span>
+            <span class="orbit-glow"></span>
+            <svg class="heart-glyph" viewBox="0 0 32 32" fill="none">
+              <path d="M16 27S5 20.6 5 12.4C5 8.5 7.9 6 11.2 6c2.1 0 3.8 1 4.8 2.5C17 7 18.7 6 20.8 6 24.1 6 27 8.5 27 12.4 27 20.6 16 27 16 27Z" fill="currentColor"/>
+            </svg>
+          </div>
+          <div class="heart-grid" aria-hidden="true"></div>
+        </article>
+
+        <article class="metric-card standard-card target-card">
+          <span class="metric-icon pink" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7.5" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </span>
+          <span class="metric-label">目标心率</span>
+          <strong id="targetRange">--</strong>
+          <span class="metric-unit">次/分钟</span>
+        </article>
+
+        <article class="metric-card standard-card zone-card">
+          <span class="metric-icon violet" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 17.5a8 8 0 1 1 16 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="m12 13 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="13" r="2" fill="currentColor"/></svg>
+          </span>
+          <span class="metric-label">训练区间</span>
+          <strong id="trainingZone">--</strong>
+          <span id="zoneState" class="metric-unit">等待数据</span>
+        </article>
+
+        <article class="metric-card standard-card compact-card">
+          <span class="metric-icon blue" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 15c3-5 6 2 9-3s5-2 7-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 20h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </span>
+          <span class="metric-label">实时配速</span>
+          <strong id="pace">--</strong>
+          <span class="metric-unit">分钟/公里</span>
+        </article>
+
+        <article class="metric-card standard-card compact-card">
+          <span class="metric-icon green" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M7 18c2.2 0 4-1.8 4-4V6M17 6v6c0 3.3-2.7 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="11" cy="5" r="2" fill="currentColor"/><circle cx="17" cy="5" r="2" fill="currentColor"/></svg>
+          </span>
+          <span class="metric-label">当前步频</span>
+          <strong id="cadence">--</strong>
+          <span class="metric-unit">步/分钟</span>
+        </article>
+
+        <article class="metric-card standard-card compact-card duration-card">
+          <span class="metric-icon orange" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="8" stroke="currentColor" stroke-width="1.8"/><path d="M12 9v4l2.8 1.8M9 3h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="metric-label">训练时长</span>
+          <strong id="duration">00:00</strong>
+          <span class="metric-unit">从首个采样开始</span>
+        </article>
       </div>
     </section>
 
-    <section class="metric-grid" aria-label="实时训练指标">
-      <article class="metric-card primary">
-        <span class="metric-label">当前心率</span>
-        <strong id="heartRate">--</strong>
-        <span class="metric-unit">次/分钟</span>
-      </article>
-      <article class="metric-card">
-        <span class="metric-label">目标心率区间</span>
-        <strong id="targetRange">--</strong>
-        <span class="metric-unit">次/分钟</span>
-      </article>
-      <article class="metric-card">
-        <span class="metric-label">训练区间</span>
-        <strong id="trainingZone">--</strong>
-        <span id="zoneState" class="metric-unit">等待数据</span>
-      </article>
-      <article class="metric-card">
-        <span class="metric-label">配速</span>
-        <strong id="pace">--</strong>
-        <span class="metric-unit">分钟/公里</span>
-      </article>
-      <article class="metric-card">
-        <span class="metric-label">步频</span>
-        <strong id="cadence">--</strong>
-        <span class="metric-unit">步/分钟</span>
-      </article>
-      <article class="metric-card">
-        <span class="metric-label">训练时长</span>
-        <strong id="duration">00:00</strong>
-        <span class="metric-unit">从首个心率采样开始</span>
-      </article>
-    </section>
-
-    <section class="panel advice-panel">
-      <div class="panel-title-row">
-        <h2>最新建议</h2>
-        <span id="adviceReason">等待训练数据</span>
+    <section class="panel chart-panel reveal" aria-labelledby="chartTitle">
+      <div class="panel-title-row chart-title-row">
+        <div>
+          <span class="section-kicker">HEART RATE</span>
+          <h2 id="chartTitle">心率曲线</h2>
+          <p>观察心率变化与目标区间的贴合程度</p>
+        </div>
+        <div class="chart-legend">
+          <span class="key"><span class="key-line" aria-hidden="true"></span>实时心率</span>
+          <span class="key"><span class="key-band" aria-hidden="true"></span>目标区间</span>
+        </div>
       </div>
-      <p id="latestAdvice">暂无建议，等待训练数据...</p>
-    </section>
-
-    <section class="panel">
-      <div class="panel-title-row">
-        <h2>训练进度</h2>
-        <span id="progressText">0 / 0</span>
-      </div>
-      <div class="progress-track">
-        <div id="progressBar" class="progress-bar"></div>
+      <div id="chartWrap" class="chart-wrap">
+        <svg id="hrChart" viewBox="0 0 720 200" preserveAspectRatio="none" role="img" aria-label="心率随采样变化曲线"></svg>
+        <div id="chartEmpty" class="chart-empty">
+          <span class="empty-chart-icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none"><path d="M7 26h8l5-12 8 23 5-11h8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <strong>等待第一组心率数据</strong>
+          <span>开始训练后，曲线会在这里实时生长</span>
+        </div>
+        <div id="chartTooltip" class="chart-tooltip"></div>
       </div>
     </section>
 
-    <section class="panel summary-panel">
-      <div class="panel-title-row">
-        <h2>训练总结</h2>
-        <span id="summaryStatus">未完成</span>
+    <section class="insight-grid reveal">
+      <section class="panel advice-panel">
+        <div class="panel-title-row">
+          <div>
+            <span class="section-kicker">COACH INSIGHT</span>
+            <h2>最新建议</h2>
+          </div>
+          <span id="adviceReason" class="chip">等待训练数据</span>
+        </div>
+        <div class="advice-content">
+          <span class="quote-mark" aria-hidden="true">“</span>
+          <p id="latestAdvice" aria-live="polite">暂无建议，开始训练后我会陪你调整节奏。</p>
+        </div>
+      </section>
+
+      <section class="panel progress-panel">
+        <div class="panel-title-row">
+          <div>
+            <span class="section-kicker">PROGRESS</span>
+            <h2>训练进度</h2>
+          </div>
+          <span id="progressText" class="panel-meta">0 / 0</span>
+        </div>
+        <div class="progress-visual">
+          <div class="progress-track" role="progressbar" aria-label="训练进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div id="progressBar" class="progress-bar"></div>
+          </div>
+          <p id="progressPct" class="progress-pct">等待开始</p>
+        </div>
+        <p class="progress-note">保持稳定的节奏，比一味追求速度更重要。</p>
+      </section>
+    </section>
+
+    <section id="summary" class="panel summary-panel reveal" aria-labelledby="summaryTitle">
+      <div class="summary-copy">
+        <span class="section-kicker">WORKOUT SUMMARY</span>
+        <div class="summary-title-line">
+          <h2 id="summaryTitle">每次结束，都是下一次的开始。</h2>
+          <span id="summaryStatus" class="chip">未完成</span>
+        </div>
+        <p id="summaryText">训练完成后，这里会生成你的专属总结与关键数据。</p>
       </div>
-      <p id="summaryText">训练完成后会显示总结。</p>
       <div class="summary-grid">
-        <div><span>平均心率</span><strong id="averageHr">--</strong></div>
-        <div><span>峰值心率</span><strong id="peakHr">--</strong></div>
-        <div><span>达标率</span><strong id="inZonePct">--</strong></div>
-        <div><span>纠正次数</span><strong id="corrections">--</strong></div>
-        <div><span>采样数</span><strong id="samples">--</strong></div>
+        <div><span>平均心率</span><strong id="averageHr">--</strong><small>BPM</small></div>
+        <div><span>峰值心率</span><strong id="peakHr">--</strong><small>BPM</small></div>
+        <div><span>目标达标率</span><strong id="inZonePct">--</strong></div>
+        <div><span>实时纠正</span><strong id="corrections">--</strong><small>次</small></div>
+        <div><span>有效采样</span><strong id="samples">--</strong><small>组</small></div>
       </div>
     </section>
 
-    <section class="panel event-panel">
-      <div class="panel-title-row">
-        <h2>事件日志</h2>
-        <button id="clearLogButton" type="button" class="ghost-button">清空</button>
+    <details class="panel event-panel reveal">
+      <summary>
+        <div>
+          <span class="section-kicker">ACTIVITY LOG</span>
+          <h2>事件日志 <span id="eventCount" class="event-count">0</span></h2>
+        </div>
+        <span class="log-toggle"><span>查看详情</span><i aria-hidden="true">⌄</i></span>
+      </summary>
+      <div class="event-panel-body">
+        <div class="event-toolbar">
+          <p>用于查看训练会话中的实时事件与状态变化。</p>
+          <button id="clearLogButton" type="button" class="ghost-button">清空日志</button>
+        </div>
+        <ol id="eventLog" class="event-log"></ol>
+        <p id="eventLogEmpty" class="event-log-empty">暂无事件。</p>
       </div>
-      <ol id="eventLog" class="event-log"></ol>
-    </section>
+    </details>
+
+    <footer class="page-footer">
+      <span class="footer-mark" aria-hidden="true">♥</span>
+      <p>Fitness Agent · 为每一次更好的训练</p>
+    </footer>
   </main>
 
-  <script src="/dashboard/app.js"></script>
+  <script src="/dashboard/app.js?v=6"></script>
 </body>
 </html>
