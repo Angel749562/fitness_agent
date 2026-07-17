@@ -2,7 +2,7 @@
 # 健身教练智能体 (fitness_agent)
 
 一个基于大语言模型 + **ReAct（思考-行动-观察）** 范式的私人健身教练智能体。
-它通过 FastAPI + WebSocket 驱动网页实时训练看板，模拟可穿戴设备数据流，完成“制定计划 → 开始训练 → 实时监测 → 即时建议 → 结束训练 → 汇总评估”的闭环，并跨会话记住你的健身档案。
+它通过 FastAPI + WebSocket 驱动网页实时训练看板，模拟可穿戴设备数据流，完成“制定计划 → 开始训练 → 实时监测 → 即时建议 → 结束训练 → 汇总评估”的闭环，并持久化训练历史用于复盘和趋势分析。
 
 实时训练闭环由规则驱动的监测层完成，不依赖 LLM；LLM 只参与训练前计划、训练后总结和自然语言解释。
 
@@ -14,7 +14,8 @@
 4. **训练结果汇总** —— 完成或结束训练后展示平均心率、峰值心率、心率达标率、纠正次数、采样数和训练摘要。
 5. **按目标动态调整训练计划** —— 支持「减脂 / 增肌 / 提升耐力」×「初级 / 中级 / 高级」，并能根据训练摘要在训练后动态调整计划。
 6. **训练效果评估 + 饮食建议** —— 按心率达标率给出效果评级与改进点，并按目标和体重给出热量方向、三餐结构与每日蛋白质参考量。
-7. **跨会话记忆** —— 自动记住健身目标、年龄、体重、运动水平（本地 `user_profile.json`）。
+7. **跨会话记忆** —— 自动记住健身目标、年龄、体重、运动水平；SQLite 为主存储，`user_profile.json` 保留为 CLI 兼容镜像。
+8. **训练历史与趋势复盘** —— SQLite 持久化训练会话、心率样本与建议事件，可查看历史详情、心率曲线和多次训练趋势。
 
 ## 🏗️ 项目结构
 
@@ -24,14 +25,15 @@ fitness_agent/
 │   ├── main.py        # FastAPI 应用、REST 路由与 WebSocket 入口
 │   └── schemas.py     # API 请求/响应模型
 ├── services/
-│   └── session_manager.py  # 内存会话注册表、后台任务、停止信号与事件队列
+│   ├── database.py         # SQLAlchemy 模型、SQLite 持久化与趋势聚合
+│   └── session_manager.py  # 实时会话注册表、持久化、后台任务与事件队列
 ├── web/
 │   ├── index.html     # Web Dashboard 页面
 │   ├── styles.css     # Dashboard 样式
 │   └── app.js         # Dashboard REST/WebSocket 客户端逻辑
 ├── agent.py           # ReAct 主循环；支持 CLI 与服务层注入式调用
 ├── llm_client.py      # OpenAI 兼容的 LLM 客户端
-├── memory.py          # 健身档案持久化（user_profile.json，跨会话记忆）
+├── memory.py          # 健身档案读写与 JSON 兼容迁移
 ├── prompts.py         # 健身教练系统提示词与工作流程引导
 ├── tools.py           # 工具集：计划生成 / 生理读数 / 效果评估 / 饮食建议 / 档案记忆
 ├── monitor.py         # 模拟可穿戴数据流 + 事件化实时监测/纠正子循环
@@ -116,6 +118,12 @@ Dashboard 默认启用演示模式，可在没有 `LLM_API_KEY` 的情况下直�
 - 训练进度与事件日志；
 - 训练完成后的总结、平均心率、峰值心率、心率达标率、纠正次数和采样数。
 
+Dashboard 顶部提供三个视图：
+
+- **实时训练**：开始/结束训练，查看实时心率、目标区间、配速、步频、建议和事件日志；
+- **训练历史**：分页浏览训练记录，查看某次训练的心率曲线、目标区间和建议采样点；
+- **趋势**：比较多次训练的平均心率和心率达标率，并查看累计训练次数和时长。
+
 页面的训练时长从第一条 `heart_rate_sample` 事件开始计时，并在训练总结、停止或错误事件到达后冻结。
 
 ### 验收标准对照
@@ -138,8 +146,27 @@ Dashboard 默认启用演示模式，可在没有 `LLM_API_KEY` 的情况下直�
 | `GET` | `/profile` | 读取本地健身档案 |
 | `PUT` | `/profile` | 覆盖写入健身档案 |
 | `POST` | `/sessions` | 创建并启动一次 Agent 会话 |
+| `GET` | `/sessions` | 分页查询训练历史（`page`、`page_size`） |
 | `GET` | `/sessions/{id}` | 查询会话状态、Dashboard 快照、最终答案与错误信息 |
+| `GET` | `/sessions/{id}/details` | 查询会话、心率样本和建议事件 |
 | `POST` | `/sessions/{id}/stop` | 幂等请求结束运行中的会话 |
+| `GET` | `/trends` | 查询训练次数、累计时长及逐次训练趋势 |
+
+训练会话状态包括 `running`、`completed`、`stopping`、`stopped`、`failed` 和 `interrupted`。服务重启时，之前仍处于 `running` 或 `stopping` 的会话会被标记为 `interrupted`，不会自动续跑。
+
+### 数据持久化
+
+默认使用项目根目录的 `fitness_agent.db`（SQLite）。应用启动时自动建表，并将已有 `user_profile.json` 导入数据库；之后数据库作为主存储，JSON 文件继续同步更新以兼容 CLI。
+
+如需切换到其他 SQLAlchemy 支持的数据库，可设置：
+
+```bash
+# SQLite 示例
+export FITNESS_DATABASE_URL=sqlite:///./fitness_agent.db
+
+# PostgreSQL 示例（需额外安装对应驱动）
+export FITNESS_DATABASE_URL=postgresql+psycopg://user:password@localhost/fitness_agent
+```
 
 创建 demo 会话示例：
 
@@ -342,11 +369,13 @@ python -m pytest tests/test_api.py
 python monitor.py
 ```
 
-测试覆盖：计划生成与动态调整、目标别名归一化、饮食建议、实时监测摘要、训练区间字段、停止后的部分训练汇总、效果评估、健康检查、档案接口、Dashboard 页面入口、开始/结束训练按钮、demo 会话创建、WebSocket 快照与事件流、心率/步频/配速采样字段、即时建议事件、结束训练后汇总指标、停止接口与缺少 API Key 的错误路径。
+测试覆盖：计划生成与动态调整、目标别名归一化、饮食建议、实时监测摘要、训练区间字段、停止后的部分训练汇总、效果评估、健康检查、档案接口、Dashboard 页面入口、开始/结束训练按钮、demo 会话创建、WebSocket 快照与事件流、心率/步频/配速采样字段、即时建议事件、结束训练后汇总指标、停止接口、历史列表与详情、趋势聚合、服务重启后的中断恢复和缺少 API Key 的错误路径。
 
 ## 📌 约束与说明
 
 - 可穿戴设备数据为 **Python 模拟生成**，未接入真实硬件 SDK。
+- 默认数据库为项目目录下的 `fitness_agent.db`；可用 `FITNESS_DATABASE_URL` 指向其他 SQLAlchemy 数据库地址。
+- 首次启动会把现有 `user_profile.json` 档案导入数据库；JSON 文件继续作为 CLI 兼容镜像。
 - 实时指导以 **文字建议** 形式呈现，未做真实 TTS 语音合成。
 - 当前支持的健身目标限定为 **减脂 / 增肌 / 提升耐力** 三类。
 - 本工具仅供健身指导参考，**不构成医疗建议**；特殊健康状况请遵医嘱。
@@ -356,6 +385,7 @@ python monitor.py
 - 接入真实可穿戴设备 SDK（华为 / 苹果 / Garmin）替换模拟层；
 - 接入真实 TTS 实现语音播报；
 - 扩充健身目标与动作库级别的姿态纠正；
-- 引入多次训练的趋势分析与周期化计划。
+- 引入周期化训练计划和跨周期目标管理；
+- 接入真实可穿戴设备后，增加设备连接状态和数据质量监测。
 
 > 更完整的功能/非功能需求、验收标准见 [需求文档.md](需求文档.md)。

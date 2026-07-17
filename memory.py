@@ -5,6 +5,8 @@
 import json
 import os
 
+from services.database import database
+
 # 记忆文件路径：和本文件放在同一目录下
 MEMORY_FILE = os.path.join(os.path.dirname(__file__), "user_profile.json")
 
@@ -15,6 +17,14 @@ def load_memory() -> dict:
     返回: 档案字典，比如 {"健身目标": "减脂", "年龄": "30", "体重": "75"}
           文件不存在或损坏时返回空字典。
     """
+    try:
+        database.ensure_schema()
+        stored = database.load_profile()
+        if stored:
+            return stored
+    except Exception:
+        # CLI 仍可在数据库暂时不可用时读取旧 JSON 档案。
+        pass
     if os.path.exists(MEMORY_FILE):
         try:
             with open(MEMORY_FILE, "r", encoding="utf-8") as f:
@@ -26,10 +36,26 @@ def load_memory() -> dict:
 
 
 def save_memory(mem: dict) -> None:
-    """把档案字典写回 JSON 文件（覆盖写）。"""
+    """保存数据库档案，并同步旧 JSON 文件以兼容现有 CLI。"""
+    database.ensure_schema()
+    database.save_profile(mem)
     with open(MEMORY_FILE, "w", encoding="utf-8") as f:
         # ensure_ascii=False 让中文正常显示；indent=2 让文件易读
         json.dump(mem, f, ensure_ascii=False, indent=2)
+
+
+def migrate_json_profile() -> None:
+    """数据库为空时一次性导入已有 JSON 档案。"""
+    database.ensure_schema()
+    if database.load_profile() or not os.path.exists(MEMORY_FILE):
+        return
+    try:
+        with open(MEMORY_FILE, "r", encoding="utf-8") as f:
+            profile = json.load(f)
+        if isinstance(profile, dict) and profile:
+            database.save_profile(profile)
+    except (json.JSONDecodeError, OSError):
+        return
 
 
 def remember(key: str, value: str) -> str:

@@ -5,6 +5,8 @@ const state = {
   workoutFinishedAt: null,
   durationTimer: null,
   hrSeries: [],
+  historyPage: 1,
+  historyTotal: 0,
 };
 
 const reasonLabels = {
@@ -92,6 +94,26 @@ const elements = {
   chartWrap: document.getElementById("chartWrap"),
   chartEmpty: document.getElementById("chartEmpty"),
   chartTooltip: document.getElementById("chartTooltip"),
+  liveView: document.getElementById("liveView"),
+  historyView: document.getElementById("historyView"),
+  trendsView: document.getElementById("trendsView"),
+  historyList: document.getElementById("historyList"),
+  historyEmpty: document.getElementById("historyEmpty"),
+  historyPage: document.getElementById("historyPage"),
+  historyPrev: document.getElementById("historyPrev"),
+  historyNext: document.getElementById("historyNext"),
+  historyDetail: document.getElementById("historyDetail"),
+  historyDetailEmpty: document.getElementById("historyDetailEmpty"),
+  detailTitle: document.getElementById("detailTitle"),
+  detailStatus: document.getElementById("detailStatus"),
+  detailMetrics: document.getElementById("detailMetrics"),
+  detailSummary: document.getElementById("detailSummary"),
+  detailAdvice: document.getElementById("detailAdvice"),
+  historyChart: document.getElementById("historyChart"),
+  trendTotals: document.getElementById("trendTotals"),
+  trendsEmpty: document.getElementById("trendsEmpty"),
+  trendContent: document.getElementById("trendContent"),
+  trendChart: document.getElementById("trendChart"),
 };
 
 function setStatus(text, variant = "idle") {
@@ -714,6 +736,163 @@ elements.promptInput.addEventListener("keydown", (event) => {
 [elements.demoInput, elements.ticksInput, elements.delayInput].forEach((control) => {
   control.addEventListener("change", savePreferences);
 });
+
+/* ---------- history and trends ---------- */
+
+const statusLabels = {...reasonLabels, failed: "失败", interrupted: "意外中断"};
+
+function switchView(view) {
+  const views = {live: elements.liveView, history: elements.historyView, trends: elements.trendsView};
+  Object.entries(views).forEach(([name, element]) => element.classList.toggle("active", name === view));
+  document.querySelectorAll("[data-view]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.view === view);
+  });
+  if (view === "history") loadHistory();
+  if (view === "trends") loadTrends();
+}
+
+function localDate(value) {
+  return value ? new Date(value).toLocaleString("zh-CN", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"}) : "--";
+}
+
+async function loadHistory() {
+  try {
+    const response = await fetch(`/sessions?page=${state.historyPage}&page_size=10`);
+    if (!response.ok) throw new Error("训练历史加载失败");
+    const payload = await response.json();
+    state.historyTotal = payload.total;
+    elements.historyList.textContent = "";
+    elements.historyEmpty.style.display = payload.items.length ? "none" : "block";
+    payload.items.forEach((session) => {
+      const summary = session.dashboard?.summary || {};
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "history-item";
+      const title = document.createElement("strong");
+      title.textContent = session.prompt;
+      const status = document.createElement("span");
+      status.className = "history-status";
+      status.textContent = statusLabels[session.status] || session.status;
+      const date = document.createElement("span");
+      date.textContent = localDate(session.created_at);
+      const metric = document.createElement("span");
+      metric.textContent = summary.samples ? `${summary.samples} 组 · 达标 ${summary.in_zone_pct}%` : "无训练采样";
+      button.append(title, status, date, metric);
+      button.addEventListener("click", () => loadHistoryDetail(session.id, button));
+      elements.historyList.append(button);
+    });
+    elements.historyPage.textContent = `第 ${payload.page} 页 · 共 ${payload.total} 次`;
+    elements.historyPrev.disabled = payload.page <= 1;
+    elements.historyNext.disabled = payload.page * payload.page_size >= payload.total;
+  } catch (error) {
+    elements.historyEmpty.style.display = "block";
+    elements.historyEmpty.textContent = error.message;
+  }
+}
+
+function renderHistoryChart(samples, advice) {
+  const svg = elements.historyChart;
+  svg.textContent = "";
+  if (!samples.length) return;
+  const hrs = samples.map((sample) => sample.heart_rate);
+  const min = Math.min(...hrs, ...samples.map((sample) => sample.target_low || 999)) - 8;
+  const max = Math.max(...hrs, ...samples.map((sample) => sample.target_high || 0)) + 8;
+  const x = (i) => 42 + (i / Math.max(1, samples.length - 1)) * 660;
+  const y = (value) => 15 + (1 - (value - min) / Math.max(1, max - min)) * 180;
+  for (let i = 0; i < 4; i += 1) {
+    const gy = 15 + i * 60;
+    svg.append(svgEl("line", {x1: 42, x2: 702, y1: gy, y2: gy, stroke: "#e5e5ea"}));
+  }
+  const low = samples.map((sample, i) => `${x(i)},${y(sample.target_low || sample.heart_rate)}`);
+  const high = samples.map((sample, i) => `${x(i)},${y(sample.target_high || sample.heart_rate)}`).reverse();
+  svg.append(svgEl("polygon", {points: [...low, ...high].join(" "), fill: "rgba(48,209,88,.10)"}));
+  const path = samples.map((sample, i) => `${i ? "L" : "M"}${x(i)},${y(sample.heart_rate)}`).join(" ");
+  svg.append(svgEl("path", {d: path, fill: "none", stroke: "#ff375f", "stroke-width": 3, "stroke-linecap": "round"}));
+  const adviceIndexes = new Set(advice.map((item) => item.sample_index));
+  samples.forEach((sample, i) => {
+    if (adviceIndexes.has(sample.sample_index)) svg.append(svgEl("circle", {cx: x(i), cy: y(sample.heart_rate), r: 5, fill: "#ff9f0a", stroke: "#fff", "stroke-width": 2}));
+  });
+}
+
+async function loadHistoryDetail(id, selectedButton) {
+  const response = await fetch(`/sessions/${id}/details`);
+  if (!response.ok) return;
+  const session = await response.json();
+  document.querySelectorAll(".history-item").forEach((button) => button.classList.remove("active"));
+  selectedButton.classList.add("active");
+  elements.historyDetailEmpty.style.display = "none";
+  elements.historyDetail.hidden = false;
+  elements.detailTitle.textContent = localDate(session.created_at);
+  setChip(elements.detailStatus, statusLabels[session.status] || session.status);
+  const summary = session.dashboard?.summary || {};
+  const metrics = [["平均心率", summary.average_heart_rate ? `${summary.average_heart_rate} BPM` : "--"], ["峰值心率", summary.peak_heart_rate ? `${summary.peak_heart_rate} BPM` : "--"], ["目标达标率", Number.isFinite(summary.in_zone_pct) ? `${summary.in_zone_pct}%` : "--"], ["实时纠正", Number.isFinite(summary.corrections) ? `${summary.corrections} 次` : "--"]];
+  elements.detailMetrics.textContent = "";
+  metrics.forEach(([label, value]) => {
+    const item = document.createElement("div");
+    const name = document.createElement("span"); name.textContent = label;
+    const result = document.createElement("strong"); result.textContent = value;
+    item.append(name, result); elements.detailMetrics.append(item);
+  });
+  elements.detailSummary.textContent = summary.summary || session.error || "本次训练没有生成总结。";
+  elements.detailAdvice.textContent = "";
+  session.advice_events.forEach((advice) => {
+    const item = document.createElement("li");
+    item.textContent = `#${advice.sample_index || "-"} · ${labelReason(advice.reason)} · ${advice.message || ""}`;
+    elements.detailAdvice.append(item);
+  });
+  if (!session.advice_events.length) {
+    const item = document.createElement("li"); item.textContent = "本次训练没有触发纠正建议。"; elements.detailAdvice.append(item);
+  }
+  renderHistoryChart(session.samples, session.advice_events);
+}
+
+function trendTotal(label, value) {
+  const item = document.createElement("div"); item.className = "trend-total";
+  const name = document.createElement("span"); name.textContent = label;
+  const result = document.createElement("strong"); result.textContent = value;
+  item.append(name, result); return item;
+}
+
+async function loadTrends() {
+  try {
+    const response = await fetch("/trends");
+    if (!response.ok) throw new Error("趋势数据加载失败");
+    const data = await response.json();
+    const points = data.points;
+    const avgHr = points.length ? Math.round(points.reduce((sum, p) => sum + p.average_heart_rate, 0) / points.length) : 0;
+    const avgZone = points.length ? Math.round(points.reduce((sum, p) => sum + p.in_zone_pct, 0) / points.length) : 0;
+    elements.trendTotals.textContent = "";
+    elements.trendTotals.append(trendTotal("完成训练", `${data.workout_count} 次`), trendTotal("累计时长", formatDuration(data.total_duration_seconds * 1000)), trendTotal("平均心率", avgHr ? `${avgHr} BPM` : "--"), trendTotal("平均达标率", points.length ? `${avgZone}%` : "--"));
+    elements.trendsEmpty.style.display = points.length ? "none" : "block";
+    elements.trendContent.hidden = !points.length;
+    renderTrendChart(points);
+  } catch (error) {
+    elements.trendsEmpty.textContent = error.message;
+  }
+}
+
+function renderTrendChart(points) {
+  const svg = elements.trendChart; svg.textContent = "";
+  if (!points.length) return;
+  const x = (i) => 42 + (i / Math.max(1, points.length - 1)) * 650;
+  const hrValues = points.map((point) => point.average_heart_rate);
+  const hrMin = Math.max(0, Math.min(...hrValues) - 10); const hrMax = Math.max(...hrValues) + 10;
+  const yHr = (value) => 20 + (1 - (value - hrMin) / Math.max(1, hrMax - hrMin)) * 190;
+  const yZone = (value) => 20 + (1 - value / 100) * 190;
+  [20, 83, 146, 210].forEach((gy) => svg.append(svgEl("line", {x1: 42, x2: 692, y1: gy, y2: gy, stroke: "#e5e5ea"})));
+  const addLine = (getter, color) => {
+    const path = points.map((point, i) => `${i ? "L" : "M"}${x(i)},${getter(point)}`).join(" ");
+    svg.append(svgEl("path", {d: path, fill: "none", stroke: color, "stroke-width": 3, "stroke-linecap": "round", "stroke-linejoin": "round"}));
+    points.forEach((point, i) => svg.append(svgEl("circle", {cx: x(i), cy: getter(point), r: 4, fill: color, stroke: "#fff", "stroke-width": 2})));
+  };
+  addLine((point) => yHr(point.average_heart_rate), "#ff375f");
+  addLine((point) => yZone(point.in_zone_pct), "#2997ff");
+}
+
+document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
+document.getElementById("refreshHistoryButton").addEventListener("click", loadHistory);
+elements.historyPrev.addEventListener("click", () => { state.historyPage -= 1; loadHistory(); });
+elements.historyNext.addEventListener("click", () => { state.historyPage += 1; loadHistory(); });
 
 loadPreferences();
 setRunningControls(false);

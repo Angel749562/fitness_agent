@@ -24,9 +24,9 @@
         <span>Fitness Agent</span>
       </a>
       <div class="nav-links" aria-label="页面导航">
-        <a href="#coach">开始训练</a>
-        <a href="#metrics">实时指标</a>
-        <a href="#summary">训练总结</a>
+        <button type="button" class="nav-view active" data-view="live">实时训练</button>
+        <button type="button" class="nav-view" data-view="history">训练历史</button>
+        <button type="button" class="nav-view" data-view="trends">趋势</button>
       </div>
       <div class="status-cluster">
         <span id="statusBadge" class="status-badge idle" role="status" aria-live="polite">
@@ -49,6 +49,14 @@
         <span><i aria-hidden="true"></i>训练复盘</span>
       </div>
     </header>
+
+    <div class="view-switcher" role="tablist" aria-label="看板视图">
+      <button type="button" class="view-button active" data-view="live" role="tab">实时训练</button>
+      <button type="button" class="view-button" data-view="history" role="tab">训练历史</button>
+      <button type="button" class="view-button" data-view="trends" role="tab">趋势</button>
+    </div>
+
+    <div id="liveView" class="dashboard-view active">
 
     <section id="coach" class="coach-card panel reveal" aria-labelledby="coachTitle">
       <div class="coach-heading">
@@ -291,6 +299,50 @@
         <p id="eventLogEmpty" class="event-log-empty">暂无事件。</p>
       </div>
     </details>
+    </div>
+
+    <section id="historyView" class="dashboard-view" aria-labelledby="historyTitle">
+      <div class="section-heading">
+        <div><span class="section-kicker">WORKOUT HISTORY</span><h2 id="historyTitle">每一次训练，都有迹可循。</h2></div>
+        <button id="refreshHistoryButton" type="button" class="ghost-button">刷新</button>
+      </div>
+      <div class="history-layout">
+        <section class="panel history-list-panel">
+          <div id="historyList" class="history-list"></div>
+          <p id="historyEmpty" class="view-empty">还没有训练记录。</p>
+          <div class="history-pager">
+            <button id="historyPrev" type="button" class="ghost-button">上一页</button>
+            <span id="historyPage">第 1 页</span>
+            <button id="historyNext" type="button" class="ghost-button">下一页</button>
+          </div>
+        </section>
+        <section class="panel history-detail-panel">
+          <div id="historyDetailEmpty" class="view-empty">选择一条训练记录查看详情。</div>
+          <div id="historyDetail" hidden>
+            <div class="detail-heading"><div><span class="section-kicker">SESSION DETAIL</span><h2 id="detailTitle">训练详情</h2></div><span id="detailStatus" class="chip"></span></div>
+            <div class="detail-metrics" id="detailMetrics"></div>
+            <svg id="historyChart" viewBox="0 0 720 220" preserveAspectRatio="none" role="img" aria-label="历史训练心率曲线"></svg>
+            <p id="detailSummary" class="detail-summary"></p>
+            <h3>实时建议</h3>
+            <ol id="detailAdvice" class="detail-advice"></ol>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section id="trendsView" class="dashboard-view" aria-labelledby="trendsTitle">
+      <div class="section-heading">
+        <div><span class="section-kicker">PROGRESS TRENDS</span><h2 id="trendsTitle">看见稳定积累的变化。</h2></div>
+      </div>
+      <div id="trendTotals" class="trend-totals"></div>
+      <section class="panel trend-panel">
+        <div id="trendsEmpty" class="view-empty">完成训练后，这里会生成趋势。</div>
+        <div id="trendContent" hidden>
+          <div class="trend-legend"><span><i class="trend-hr"></i>平均心率</span><span><i class="trend-zone"></i>达标率</span></div>
+          <svg id="trendChart" viewBox="0 0 720 260" preserveAspectRatio="none" role="img" aria-label="训练趋势图"></svg>
+        </div>
+      </section>
+    </section>
 
     <footer class="page-footer">
       <span class="footer-mark" aria-hidden="true">♥</span>
@@ -298,6 +350,6 @@
     </footer>
   </main>
 
-  <script src="/dashboard/app.js?v=6"></script>
+  <script src="/dashboard/app.js?v=7"></script>
 </body>
 </html>

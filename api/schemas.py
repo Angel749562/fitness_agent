@@ -3,7 +3,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
-SessionStatus = Literal["running", "completed", "stopping", "stopped", "failed"]
+SessionStatus = Literal["running", "completed", "stopping", "stopped", "failed", "interrupted"]
 
 
 class HealthResponse(BaseModel):
@@ -47,3 +47,21 @@ class SessionEvent(BaseModel):
     session_id: str
     timestamp: str
     data: dict[str, Any]
+
+
+class SessionListResponse(BaseModel):
+    items: list[SessionResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class SessionDetailsResponse(SessionResponse):
+    samples: list[dict[str, Any]] = Field(default_factory=list)
+    advice_events: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class TrendsResponse(BaseModel):
+    workout_count: int
+    total_duration_seconds: int
+    points: list[dict[str, Any]] = Field(default_factory=list)

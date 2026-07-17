@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import agent
 import monitor
+from services.database import Database, database
 
 
 def utc_now() -> str:
@@ -46,8 +47,9 @@ class SessionState:
 
 
 class SessionManager:
-    def __init__(self):
+    def __init__(self, repository: Database | None = None):
         self.sessions: dict[str, SessionState] = {}
+        self.repository = repository or database
         self._lock = asyncio.Lock()
         self._loop: asyncio.AbstractEventLoop | None = None
 
@@ -73,13 +75,36 @@ class SessionManager:
             self.sessions[session_id] = session
 
         self._loop = asyncio.get_running_loop()
+        try:
+            self.repository.create_session(
+                session.snapshot(), demo=demo, ticks=workout_ticks, delay=workout_tick_delay
+            )
+        except Exception:
+            async with self._lock:
+                self.sessions.pop(session_id, None)
+            raise
         await self.emit(session, "session_started", session.snapshot())
         session.task = asyncio.create_task(self._run_session(session))
         return session
 
     async def get_session(self, session_id: str) -> SessionState | None:
         async with self._lock:
-            return self.sessions.get(session_id)
+            session = self.sessions.get(session_id)
+        if session:
+            return session
+        snapshot = self.repository.get_session(session_id)
+        if not snapshot:
+            return None
+        restored = SessionState(
+            id=snapshot["id"], prompt=snapshot["prompt"], status=snapshot["status"],
+            created_at=snapshot["created_at"], updated_at=snapshot["updated_at"],
+            demo=False, workout_ticks=0, workout_tick_delay=0, llm=None,
+            dashboard=snapshot["dashboard"], final_answer=snapshot["final_answer"],
+            error=snapshot["error"],
+        )
+        async with self._lock:
+            self.sessions[session_id] = restored
+        return restored
 
     async def stop_session(self, session_id: str) -> SessionState | None:
         session = await self.get_session(session_id)
@@ -96,12 +121,16 @@ class SessionManager:
     async def emit(self, session: SessionState, event_type: str, data: dict[str, Any]):
         session.updated_at = utc_now()
         self._update_dashboard(session, event_type, data)
-        await session.queue.put({
+        event = {
             "type": event_type,
             "session_id": session.id,
             "timestamp": session.updated_at,
             "data": data,
-        })
+        }
+        self.repository.persist_event(
+            session.snapshot(), event_type, session.updated_at, data
+        )
+        await session.queue.put(event)
 
     def _update_dashboard(self, session: SessionState, event_type: str, data: dict[str, Any]):
         if event_type == "heart_rate_sample":
@@ -123,7 +152,8 @@ class SessionManager:
     def emit_from_thread(self, session: SessionState, event_type: str, data: dict[str, Any]):
         if not self._loop:
             return
-        asyncio.run_coroutine_threadsafe(self.emit(session, event_type, data), self._loop)
+        future = asyncio.run_coroutine_threadsafe(self.emit(session, event_type, data), self._loop)
+        future.result()
 
     async def _run_session(self, session: SessionState):
         try:
@@ -137,6 +167,10 @@ class SessionManager:
                 await self.emit(session, "stopped", {"reason": "训练已停止"})
             elif result.get("status") == "completed":
                 session.status = "completed"
+                session.updated_at = utc_now()
+                self.repository.persist_event(
+                    session.snapshot(), "state_update", session.updated_at, {}
+                )
             else:
                 session.status = "failed"
                 if not session.error:
@@ -144,8 +178,16 @@ class SessionManager:
                 await self.emit(session, "error", {"message": session.error})
         except Exception as exc:
             session.status = "failed"
-            session.error = str(exc)
-            await self.emit(session, "error", {"message": str(exc)})
+            session.error = f"训练数据保存失败：{exc}"
+            session.updated_at = utc_now()
+            error_event = {
+                "type": "error", "session_id": session.id, "timestamp": session.updated_at,
+                "data": {"message": session.error},
+            }
+            try:
+                await self.emit(session, "error", error_event["data"])
+            except Exception:
+                await session.queue.put(error_event)
         finally:
             session.updated_at = utc_now()
 

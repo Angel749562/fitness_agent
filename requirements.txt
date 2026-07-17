@@ -3,3 +3,4 @@ fastapi
 uvicorn[standard]
 httpx
 pytest-asyncio
+SQLAlchemy>=2.0,<3.0
